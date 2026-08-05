@@ -1,0 +1,13 @@
+services:
+  telegent:
+    build: .
+    env_file: .env
+    environment:
+      # Keep the SQLite memory in the named volume so it survives up/down.
+      - DB_PATH=/app/data/telegent.db
+    volumes:
+      - telegent-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  telegent-data:

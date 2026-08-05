@@ -1,0 +1,3 @@
+python-telegram-bot>=20
+pydantic-ai>=0.0.14
+python-dotenv>=1.0
