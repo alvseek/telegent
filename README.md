@@ -1,92 +1,89 @@
 # telegent
 
-A Telegram-fronted AI agent. A Telegram bot bridges your messages to an LLM agent
-(via [OpenRouter](https://openrouter.ai), using [pydantic-ai](https://ai.pydantic.dev))
-with per-chat conversation memory. Minimal, self-hostable, MIT-licensed.
+The **Telegram bridge** for [universal-chat-agent](../universal-chat-agent). A
+thin, stateless pipe: it receives Telegram messages, forwards them to the brain
+over HTTP, and sends the brain's reply back. It holds **no intelligence and no
+memory** — swap the brain's model or wipe its database and telegent doesn't
+change; build a WhatsApp/web bridge against the same brain and this repo is
+untouched.
 
-- **Telegram bot** = a dumb I/O bridge (receive → reply)
-- **Brain** = a pydantic-ai agent on *your* chosen OpenRouter model
-- **Memory** = per-`chat_id`, SQLite-persisted, bounded window (survives restarts)
-
-> **M1** is the bare bot: message → model → reply, with memory. Skills, knowledge (RAG),
-> and custom tools come in later increments.
+> Brain (the reusable agent): [universal-chat-agent](../universal-chat-agent)
 
 ---
 
-## 1. Create a Telegram bot (BotFather)
+## Q1 — What is this?
 
-1. In Telegram, open [**@BotFather**](https://t.me/BotFather).
-2. Send `/newbot`, then follow the prompts (name + a username ending in `bot`).
-3. BotFather replies with a **token** like `123456:ABC-...`. Copy it.
+A Telegram bot front-end. Its only job is translation between Telegram and the
+brain's HTTP contract. Every message is tagged with a namespaced
+`conversation_id` (`telegram:<chat_id>`) so the brain keeps each chat's memory
+separate and never collides with other platforms.
 
-## 2. Get an OpenRouter key
+Structured with the **A-Boxed Level 1** pattern (flat semantic-prefix layers).
+Because it's stateless, its data/business layers are intentionally empty
+placeholders (see their READMEs).
 
-Sign in at [openrouter.ai](https://openrouter.ai) → **Keys** → create a key.
-
-## 3. Configure
+## Q2 — How to set up?
 
 ```bash
-cp .env.example .env
-```
-
-Fill `.env`:
-
-| Variable | Required | Default | Notes |
-|---|---|---|---|
-| `TELEGRAM_BOT_TOKEN` | ✅ | — | from BotFather |
-| `OPENROUTER_API_KEY` | ✅ | — | from OpenRouter |
-| `OPENROUTER_MODEL` | ✅ | `deepseek/deepseek-chat` | any OpenRouter model id — swap freely |
-| `OPENROUTER_BASE_URL` | — | `https://openrouter.ai/api/v1` | OpenAI-compatible endpoint |
-| `MEMORY_WINDOW` | — | `15` | recent messages remembered per chat |
-| `DB_PATH` | — | `telegent.db` | SQLite memory file |
-| `SYSTEM_PROMPT` | — | (friendly assistant) | the agent's persona |
-
-> `.env` is gitignored — never commit it.
-
-## 4. Run
-
-**Local (Python 3.11+):**
-```bash
+python -m venv .venv && . .venv/bin/activate    # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-python main.py
+cp .env.example .env        # fill TELEGRAM_BOT_TOKEN + BRAIN_URL
 ```
 
-**Docker:**
+Create a bot: message **@BotFather** on Telegram → `/newbot` → follow prompts →
+copy the token into `.env` as `TELEGRAM_BOT_TOKEN`.
+
+## Q3 — How to use?
+
+Start the brain first (see universal-chat-agent), then run the bridge:
+
 ```bash
-docker compose up --build
+python -m application.main
 ```
-(Memory persists in the `telegent-data` volume across `up`/`down`.)
 
-Then open your bot in Telegram, send `/start`, and chat. It remembers the
-conversation per chat.
+Message your bot on Telegram. `/start` for a greeting; any text gets a reply
+from the brain, with conversation memory.
 
----
+## Q4 — How it works?
 
-## Tests
+```
+Telegram ──▶ api_controllers/telegram_handler
+                 │  conversation_id = "telegram:<chat_id>"
+                 ▼
+             api_integrations/brain/brain_client  ──HTTP POST /chat──▶  brain
+                 │                                                        │
+                 ◀────────────────────  {reply}  ◀────────────────────────┘
+                 ▼
+             common/message_chunker (split to 4096)  ──▶ Telegram reply
+```
 
-Model-free checks (no network or keys needed):
+The bridge never sees the model or the database — only the brain's
+`{conversation_id, message} → {reply}` contract.
+
+## Q5 — How deployed?
+
 ```bash
-python test_telegent.py
+docker compose up --build      # set BRAIN_URL in .env so it can reach the brain
 ```
 
-## Project structure (A-Boxed Level 1)
+Running both in Docker: put both compose projects on a shared network and set
+`BRAIN_URL=http://universal-chat-agent:8000`, or point the bridge at the host
+with `BRAIN_URL=http://host.docker.internal:8000`.
 
-```
-config.py         # env loading + validation
-memory_store.py   # per-chat_id SQLite conversation memory (bounded)
-agent_core.py     # pydantic-ai agent on the OpenRouter model
-bot_telegram.py   # Telegram handlers (dumb bridge) + reply chunking
-main.py           # wires it together, starts long-polling
-test_telegent.py  # model-free tests
-Dockerfile · docker-compose.yml · requirements.txt · .env.example
-```
+## Q6 — What decisions?
 
-## Notes
+- **Split from the brain (this repo = bridge only)**: isolates Telegram-specific
+  deps and failures, and lets one brain serve many bridges (WhatsApp, web, …).
+- **HTTP to the brain**: any-language bridges + full process/dep isolation; the
+  localhost hop is sub-millisecond next to the LLM call. Transport is behind
+  `brain_client`, so a future swap (gRPC) is one file.
+- **Stateless**: memory lives in the brain, keyed by `conversation_id`.
 
-- **One instance per bot token** — long-polling means a second running copy causes a
-  Telegram `409 Conflict`.
-- **Swappable by design** — the brain lives only in `agent_core.py`; the platform,
-  memory, and model can each change without touching the others.
+## Q7 — What's broken / TODO?
+
+- Requires the brain to be running (`BRAIN_URL`); no offline fallback.
+- Long-polling only (no webhook mode yet).
+- `/start` is the only command; no rich command routing.
 
 ## License
 
