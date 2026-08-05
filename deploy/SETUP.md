@@ -25,11 +25,9 @@ cp ~/universal-chat-agent/.env.example ~/universal-chat-agent/.env   # fill OPEN
 cp ~/telegent/.env.example ~/telegent/.env                           # fill TELEGRAM_BOT_TOKEN; set BRAIN_URL=http://127.0.0.1:8100
 ```
 
-**3. Install the sudoers grant — RUN AS ROOT, once** (mirrors `deploy-invintiry`):
+**3. Root setup — RUN AS ROOT, once** (installs the sudoers grant; mirrors invintiry's `setup.sh`):
 ```bash
-sudo cp ~/telegent/deploy/telegent.sudoers /etc/sudoers.d/deploy-telegent
-sudo chmod 440 /etc/sudoers.d/deploy-telegent
-sudo visudo -cf /etc/sudoers.d/deploy-telegent
+bash /home/deploy/telegent/deploy/setup.sh
 ```
 
 **4. Set up each app** (as `deploy`) — brain first:
