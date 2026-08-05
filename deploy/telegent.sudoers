@@ -1,0 +1,8 @@
+# /etc/sudoers.d/deploy-telegent
+# Lets the deploy user manage the telegent services without a password.
+# Mirrors deploy-invintiry. Install ONCE as root:
+#   sudo cp deploy/telegent.sudoers /etc/sudoers.d/deploy-telegent
+#   sudo chmod 440 /etc/sudoers.d/deploy-telegent
+#   sudo visudo -cf /etc/sudoers.d/deploy-telegent
+# (systemctl daemon-reload and /bin/cp are already granted by deploy-invintiry.)
+deploy ALL=(ALL) NOPASSWD: /bin/systemctl start telegent-brain, /bin/systemctl start telegent-bridge, /bin/systemctl stop telegent-brain, /bin/systemctl stop telegent-bridge, /bin/systemctl restart telegent-brain, /bin/systemctl restart telegent-bridge, /bin/systemctl enable telegent-brain, /bin/systemctl enable telegent-bridge, /bin/systemctl status telegent-brain, /bin/systemctl status telegent-bridge
