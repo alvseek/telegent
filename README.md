@@ -158,29 +158,19 @@ nothing.
 
 ## How Is It Deployed?
 
-Two **systemd** services co-hosted on the invintiry VPS — **no Docker, no public ingress**
-(the bridge long-polls Telegram outbound; the brain listens on loopback only). Full,
-copy-pasteable steps in **[deploy/SETUP.md](deploy/SETUP.md)**.
+Each component runs as a normal long-running Python process under any process manager
+(systemd, Docker, a supervisor): the **brain** under `uvicorn` on loopback, the **bridge** as
+a long-poll worker. The bridge needs **no public ingress** (it long-polls Telegram outbound);
+the brain listens on loopback only.
 
-| Service | Runs | Listens |
+| Component | Runs | Listens |
 |---|---|---|
-| `telegent-brain` | `uvicorn application.main:app` (from `application/brain`) | `127.0.0.1:8100` |
-| `telegent-bridge` | `python -m application.main` (long-poll) | nothing (outbound) |
-
-Provisioning mirrors the invintiry `deploy/` convention (deps via `uv`, a root `setup.sh`
-that installs the sudoers grant, `setup-app.sh` / `redeploy.sh` per component). Ops:
-
-```sh
-sudo systemctl status telegent-brain telegent-bridge
-curl -s http://127.0.0.1:8100/health        # {"status":"ok"}
-```
+| brain | `uvicorn application.main:app` | loopback (e.g. `127.0.0.1:8100`) |
+| bridge | `python -m application.main` (long-poll) | nothing (outbound) |
 
 **One instance per bot token** — a second bridge polling the same token gets a Telegram
-`409 Conflict`. **CI/CD**: none yet.
-
-> ⚠️ **Production still runs the pre-restructure flat layout.** Migrating the live box onto
-> this monorepo is a **coordinated redeploy** (WorkingDirectory + venv location change), not
-> a plain `git pull` — see *Migrating the live box* in [deploy/SETUP.md](deploy/SETUP.md).
+`409 Conflict`. Production topology and provisioning are managed **out-of-repo**. **CI/CD**:
+none yet.
 
 ---
 
@@ -226,8 +216,8 @@ relocated freely.
 ### Medium Priority
 
 - **Production runs the pre-restructure flat layout.** *Why*: the live box predates the
-  monorepo restructure; migrating it is a coordinated redeploy (see [deploy/SETUP.md](deploy/SETUP.md)),
-  done deliberately rather than incidentally.
+  monorepo restructure; migrating it is a coordinated redeploy (WorkingDirectory + venv
+  location change), done deliberately rather than incidentally.
 - **The brain submodule's deploy scripts still assume a standalone clone path.** *Why*: they
   need to become **self-locating** (work whether cloned standalone or nested at
   `application/brain`); reconciled during the migration above.
