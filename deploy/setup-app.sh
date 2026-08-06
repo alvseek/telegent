@@ -9,7 +9,9 @@
 # =============================================================================
 set -euo pipefail
 
-APP_DIR="/home/deploy/telegent"
+# Monorepo: the repo root holds deploy/; the bridge app lives in application/bridge/.
+REPO_DIR="/home/deploy/telegent"
+APP_DIR="$REPO_DIR/application/bridge"
 UV="$HOME/.local/bin/uv"
 
 echo "=== telegent-bridge setup ==="
@@ -21,7 +23,7 @@ cd "$APP_DIR"
 "$UV" pip install --python .venv/bin/python --no-cache -r requirements.txt
 
 echo "[2/3] install systemd unit..."
-sudo cp "$APP_DIR/deploy/telegent-bridge.service" /etc/systemd/system/
+sudo cp "$REPO_DIR/deploy/telegent-bridge.service" /etc/systemd/system/
 sudo systemctl daemon-reload
 
 echo "[3/3] enable + start..."

@@ -7,16 +7,19 @@
 # =============================================================================
 set -euo pipefail
 
-APP_DIR="/home/deploy/telegent"
+# Monorepo: git lives at the repo root; the bridge app lives in application/bridge/.
+REPO_DIR="/home/deploy/telegent"
+APP_DIR="$REPO_DIR/application/bridge"
 UV="$HOME/.local/bin/uv"
 
 echo "=== telegent-bridge redeploy ==="
-cd "$APP_DIR"
 
-echo "[1/3] pull..."
+echo "[1/3] pull (repo root)..."
+cd "$REPO_DIR"
 git pull origin main
 
-echo "[2/3] deps..."
+echo "[2/3] deps (bridge app)..."
+cd "$APP_DIR"
 "$UV" pip install --python .venv/bin/python --no-cache -r requirements.txt
 
 echo "[3/3] restart..."

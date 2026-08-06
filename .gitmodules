@@ -1,0 +1,3 @@
+[submodule "application/brain"]
+	path = application/brain
+	url = https://github.com/alvseek/universal-chat-agent.git
