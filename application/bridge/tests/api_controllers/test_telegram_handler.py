@@ -120,3 +120,13 @@ def test_start_is_gated_too():
     asyncio.run(telegram_handler.on_start(update, context))
 
     assert sent == []
+
+
+def test_start_greets_listed_chat():
+    sent = []
+    update = _fake_update("/start", 42, sent)
+    context = _fake_context(SimpleNamespace(), allowed=frozenset({42}))
+
+    asyncio.run(telegram_handler.on_start(update, context))
+
+    assert len(sent) == 1 and "telegent" in sent[0]

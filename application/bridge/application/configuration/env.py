@@ -52,11 +52,20 @@ def _float(name: str, default: float) -> float:
         return default
 
 
+_TRUE = ("1", "true", "yes", "on")
+_FALSE = ("0", "false", "no", "off")
+
+
 def _bool(name: str, default: bool) -> bool:
     value = os.getenv(name, "").strip().lower()
     if not value:
         return default
-    return value in ("1", "true", "yes", "on")
+    if value in _TRUE:
+        return True
+    if value in _FALSE:
+        return False
+    # A typo must not silently flip a safety setting — fail at startup, by name.
+    raise ValueError(f"{name}: {value!r} is not a boolean (use true/false)")
 
 
 def load_config() -> Config:
