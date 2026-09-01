@@ -10,6 +10,8 @@ from dataclasses import dataclass
 
 from dotenv import load_dotenv
 
+from application.business_domain.access_policy import Allowlist, parse_allowlist
+
 load_dotenv()
 
 DEFAULT_BRAIN_URL = "http://localhost:8000"
@@ -24,6 +26,13 @@ class Config:
     # brain answers as its default agent; set, the brain awakens that agent from the
     # memory service and answers as it. This is the roster entry for this bot.
     agent_id: str | None
+    # Which chats may talk to this bot. None = open (anyone); a set = only those
+    # chat ids, everything else is dropped silently before the brain is called.
+    allowed_chat_ids: Allowlist
+    # Discard updates Telegram queued while the bridge was down, instead of
+    # replaying them on start. On by default: a command sent hours ago should not
+    # run the moment the bot comes back.
+    drop_pending_updates: bool
 
 
 def _require(name: str) -> str:
@@ -43,10 +52,19 @@ def _float(name: str, default: float) -> float:
         return default
 
 
+def _bool(name: str, default: bool) -> bool:
+    value = os.getenv(name, "").strip().lower()
+    if not value:
+        return default
+    return value in ("1", "true", "yes", "on")
+
+
 def load_config() -> Config:
     return Config(
         telegram_bot_token=_require("TELEGRAM_BOT_TOKEN"),
         brain_url=os.getenv("BRAIN_URL", DEFAULT_BRAIN_URL).strip() or DEFAULT_BRAIN_URL,
         brain_timeout=_float("BRAIN_TIMEOUT", 60.0),
         agent_id=os.getenv("AGENT_ID", "").strip() or None,
+        allowed_chat_ids=parse_allowlist(os.getenv("ALLOWED_CHAT_IDS")),
+        drop_pending_updates=_bool("DROP_PENDING_UPDATES", True),
     )

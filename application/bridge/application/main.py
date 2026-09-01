@@ -27,9 +27,13 @@ def main() -> None:
     app.bot_data.update(brain=brain, config=config)
 
     logging.getLogger("telegent").info(
-        "telegent bridge starting -> brain=%s (long-polling)", config.brain_url
+        "telegent bridge starting -> brain=%s agent=%s allowlist=%s drop_pending=%s (long-polling)",
+        config.brain_url,
+        config.agent_id or "default",
+        "open" if config.allowed_chat_ids is None else f"{len(config.allowed_chat_ids)} chat(s)",
+        config.drop_pending_updates,
     )
-    app.run_polling()
+    app.run_polling(drop_pending_updates=config.drop_pending_updates)
 
 
 if __name__ == "__main__":

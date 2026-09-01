@@ -30,14 +30,16 @@ For **anyone self-hosting a Telegram front-end** onto a reusable chat agent.
 ### Architecture
 
 Follows the **A-Boxed Level 1** pattern (flat semantic-prefix layers). Because the bridge is
-stateless, its `data_*` and `business_*` layers are intentionally empty placeholders (each
-has a README explaining why).
+stateless, its `data_*` and `business_services` layers are intentionally empty placeholders
+(each has a README explaining why). The one domain rule it does own — *which chats may talk
+to this bot* — lives in `business_domain/access_policy.py` as pure functions.
 
 ```
 Telegram ──▶ api_controllers/telegram_handler
+                 │  business_domain/access_policy: chat on ALLOWED_CHAT_IDS?  (no → dropped, WARNING logged)
                  │  conversation_id = "telegram:<chat_id>"   (namespacing → brain stays platform-agnostic)
                  ▼
-             api_integrations/brain/brain_client  ──HTTP POST /chat──▶  brain (../brain)
+             api_integrations/brain/brain_client  ──HTTP POST /chat {…, agent_id?}──▶  brain (../brain)
                  │                                                            │
                  ◀──────────────────────  {reply}  ◀──────────────────────────┘
                  ▼
@@ -98,6 +100,12 @@ Run from this component's folder (`application/bridge`):
 | `TELEGRAM_BOT_TOKEN` | Bot token from @BotFather (required) | `123456:ABC-...` |
 | `BRAIN_URL` | Base URL of the running brain | `http://127.0.0.1:8100` |
 | `BRAIN_TIMEOUT` | Seconds to wait for a brain reply (LLM is slow) | `60` |
+| `AGENT_ID` | Which agent this bot *is* (sent on every `/chat`); empty = the brain's default agent | `invintiry-operator` |
+| `ALLOWED_CHAT_IDS` | Comma-separated chat ids that may talk to this bot; empty = anyone. Other chats are dropped silently and logged at WARNING | `8932435376,-100123` |
+| `DROP_PENDING_UPDATES` | Discard messages queued while the bridge was down instead of replaying them on start | `true` (default) |
+
+Your own chat id is in the bridge log the first time you message the bot from an unlisted
+account (`refused chat <id>`), or in the brain's conversation ids (`telegram:<id>`).
 
 ---
 
@@ -123,15 +131,28 @@ Run from this component's folder (`application/bridge`):
 
 ### Core Flow: message → reply
 
-1. **Receive** (`application/api_controllers/telegram_handler.py`)
+1. **Admit** (`application/business_domain/access_policy.py`)
+   - Before anything else, the chat is checked against `ALLOWED_CHAT_IDS`. An unlisted chat
+     gets no typing indicator, no brain call and no reply — only a WARNING line with its id.
+     This applies to `/start` too, so a stranger cannot even confirm the bot is alive.
+2. **Receive** (`application/api_controllers/telegram_handler.py`)
    - A text update arrives; the handler tags it `conversation_id = "telegram:<chat_id>"`.
-2. **Forward** (`application/api_integrations/brain/brain_client.py`)
-   - `POST {BRAIN_URL}/chat {conversation_id, message}` over a keep-alive httpx client.
-3. **Reply** (`application/common/message_chunker.py`)
+3. **Forward** (`application/api_integrations/brain/brain_client.py`)
+   - `POST {BRAIN_URL}/chat {conversation_id, message, agent_id?}` over a keep-alive httpx client.
+4. **Reply** (`application/common/message_chunker.py`)
    - The brain's `{reply}` is split into ≤4096-char pieces and sent back to the chat.
 
 On any failure the handler logs it and sends a friendly apology, so a brain outage never
 crashes the bridge.
+
+### Messages sent while the bridge is down
+
+Telegram queues updates for ~24 h. python-telegram-bot confirms a fetched batch to Telegram
+*before* the handlers run, so a crash mid-reply never replays that message — it is lost.
+What *would* be replayed is the backlog from downtime, and with `DROP_PENDING_UPDATES=true`
+(the default) that backlog is discarded on start: a command sent hours ago should not run the
+moment the bot comes back. The sender sees no reply and re-sends. Set it to `false` for a
+personal bot that should catch up instead.
 
 ### External Integrations
 
@@ -188,6 +209,19 @@ transport can be swapped in one file later if streaming is ever needed.
 **Trade-off**: The bridge can't work offline from the brain — accepted, since statelessness
 is what lets many bridges share one brain and one memory without coordination.
 
+### ADR-004: The bridge is the door — allowlist here, and drop the backlog (2026-09-01)
+
+**Context**: Once a bot answers *as* a named agent that can act on other systems, "who may
+message it" is an authorization boundary, and the bridge is the only component in front of
+the brain. Separately, replaying downtime backlog would run commands out of their moment.
+**Decision**: A per-bot `ALLOWED_CHAT_IDS` checked before any I/O (silent drop, WARNING
+log), and `DROP_PENDING_UPDATES` defaulting to true. Neither adds state to the bridge.
+**Trade-off**: An unlisted chat gets silence rather than an explanation, and a message sent
+while the bot was down is lost rather than answered late — both accepted for an operator
+bot; a personal bot can set an empty list and `DROP_PENDING_UPDATES=false`. An `update_id`
+dedupe store was rejected: the library already confirms updates before processing, so it
+would guard a millisecond window at the cost of the bridge's statelessness.
+
 ---
 
 ## What's Broken / Known Debts?
@@ -201,9 +235,8 @@ is what lets many bridges share one brain and one memory without coordination.
 
 - Long-polling only — no webhook mode yet.
 - `/start` is the only command; no rich command routing.
-- Backlog replay: messages sent while the bridge is offline are delivered on reconnect
-  (Telegram queues updates ~24h). Intentional for a personal bot; set
-  `run_polling(drop_pending_updates=True)` in `application/main.py` to disable.
+- The allowlist is per bot, not per agent: one bridge is one bot is one agent, so they
+  coincide today, but a bridge serving several agents would need the list keyed by agent.
 
 ---
 

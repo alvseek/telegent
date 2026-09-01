@@ -19,11 +19,11 @@ def _fake_update(text, chat_id, sent):
     return SimpleNamespace(message=message)
 
 
-def _fake_context(brain, agent_id=None):
+def _fake_context(brain, agent_id=None, allowed=None):
     bot = SimpleNamespace(send_chat_action=AsyncMock())
     bot_data = {"brain": brain}
-    if agent_id is not None:
-        bot_data["config"] = SimpleNamespace(agent_id=agent_id)
+    if agent_id is not None or allowed is not None:
+        bot_data["config"] = SimpleNamespace(agent_id=agent_id, allowed_chat_ids=allowed)
     return SimpleNamespace(bot=bot, bot_data=bot_data)
 
 
@@ -71,3 +71,52 @@ def test_brain_failure_sends_apology():
     asyncio.run(telegram_handler.on_message(update, context))
 
     assert sent and "wrong" in sent[0].lower()
+
+
+def test_unlisted_chat_gets_nothing_and_is_logged(caplog):
+    sent = []
+    brain = SimpleNamespace(chat=AsyncMock(return_value="should not happen"))
+    update = _fake_update("hello", 999, sent)
+    context = _fake_context(brain, allowed=frozenset({42}))
+
+    with caplog.at_level("WARNING", logger="telegent"):
+        asyncio.run(telegram_handler.on_message(update, context))
+
+    brain.chat.assert_not_awaited()
+    context.bot.send_chat_action.assert_not_awaited()
+    assert sent == []
+    assert any("refused chat 999" in r.getMessage() for r in caplog.records)
+
+
+def test_listed_chat_is_admitted():
+    sent = []
+    brain = SimpleNamespace(chat=AsyncMock(return_value="ok"))
+    update = _fake_update("hello", 42, sent)
+    context = _fake_context(brain, allowed=frozenset({42}))
+
+    asyncio.run(telegram_handler.on_message(update, context))
+
+    brain.chat.assert_awaited_once()
+    assert sent == ["ok"]
+
+
+def test_open_allowlist_admits_everyone():
+    sent = []
+    brain = SimpleNamespace(chat=AsyncMock(return_value="ok"))
+    update = _fake_update("hello", 999, sent)
+    context = _fake_context(brain, allowed=None)
+
+    asyncio.run(telegram_handler.on_message(update, context))
+
+    brain.chat.assert_awaited_once()
+    assert sent == ["ok"]
+
+
+def test_start_is_gated_too():
+    sent = []
+    update = _fake_update("/start", 999, sent)
+    context = _fake_context(SimpleNamespace(), allowed=frozenset({42}))
+
+    asyncio.run(telegram_handler.on_start(update, context))
+
+    assert sent == []
