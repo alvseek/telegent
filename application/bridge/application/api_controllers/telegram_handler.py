@@ -32,10 +32,12 @@ async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         return
     chat_id = message.chat_id
     brain = context.bot_data["brain"]
+    config = context.bot_data.get("config")
+    agent_id = getattr(config, "agent_id", None)
     conversation_id = f"{PLATFORM}:{chat_id}"
     try:
         await context.bot.send_chat_action(chat_id, constants.ChatAction.TYPING)
-        reply = await brain.chat(conversation_id, message.text)
+        reply = await brain.chat(conversation_id, message.text, agent_id=agent_id)
         for part in chunk(reply):
             await message.reply_text(part)
     except Exception:

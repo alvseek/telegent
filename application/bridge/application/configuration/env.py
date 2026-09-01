@@ -20,6 +20,10 @@ class Config:
     telegram_bot_token: str
     brain_url: str       # base URL of universal-chat-agent, e.g. http://localhost:8000
     brain_timeout: float  # seconds to wait for a brain reply (LLM calls are slow)
+    # Which agent this bot *is*. One bridge = one bot token = one agent. Absent, the
+    # brain answers as its default agent; set, the brain awakens that agent from the
+    # memory service and answers as it. This is the roster entry for this bot.
+    agent_id: str | None
 
 
 def _require(name: str) -> str:
@@ -44,4 +48,5 @@ def load_config() -> Config:
         telegram_bot_token=_require("TELEGRAM_BOT_TOKEN"),
         brain_url=os.getenv("BRAIN_URL", DEFAULT_BRAIN_URL).strip() or DEFAULT_BRAIN_URL,
         brain_timeout=_float("BRAIN_TIMEOUT", 60.0),
+        agent_id=os.getenv("AGENT_ID", "").strip() or None,
     )

@@ -13,16 +13,25 @@ import httpx
 
 
 class BrainClient:
-    def __init__(self, base_url: str, timeout: float) -> None:
+    def __init__(
+        self, base_url: str, timeout: float, client: httpx.AsyncClient | None = None
+    ) -> None:
         self._url = base_url.rstrip("/") + "/chat"
-        self._client = httpx.AsyncClient(timeout=timeout)
+        # Injectable so tests can hand in a client with a mock transport.
+        self._client = client or httpx.AsyncClient(timeout=timeout)
 
-    async def chat(self, conversation_id: str, message: str) -> str:
-        """POST one turn to the brain and return its reply text."""
-        resp = await self._client.post(
-            self._url,
-            json={"conversation_id": conversation_id, "message": message},
-        )
+    async def chat(
+        self, conversation_id: str, message: str, agent_id: str | None = None
+    ) -> str:
+        """POST one turn to the brain and return its reply text.
+
+        ``agent_id`` names which agent answers; it is sent only when set, so a brain
+        that predates multi-agent support sees the same request it always did.
+        """
+        body: dict = {"conversation_id": conversation_id, "message": message}
+        if agent_id:
+            body["agent_id"] = agent_id
+        resp = await self._client.post(self._url, json=body)
         resp.raise_for_status()
         return resp.json()["reply"]
 

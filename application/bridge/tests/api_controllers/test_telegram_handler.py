@@ -19,9 +19,12 @@ def _fake_update(text, chat_id, sent):
     return SimpleNamespace(message=message)
 
 
-def _fake_context(brain):
+def _fake_context(brain, agent_id=None):
     bot = SimpleNamespace(send_chat_action=AsyncMock())
-    return SimpleNamespace(bot=bot, bot_data={"brain": brain})
+    bot_data = {"brain": brain}
+    if agent_id is not None:
+        bot_data["config"] = SimpleNamespace(agent_id=agent_id)
+    return SimpleNamespace(bot=bot, bot_data=bot_data)
 
 
 def test_forwards_to_brain_with_namespaced_id_and_replies():
@@ -32,8 +35,20 @@ def test_forwards_to_brain_with_namespaced_id_and_replies():
 
     asyncio.run(telegram_handler.on_message(update, context))
 
-    brain.chat.assert_awaited_once_with("telegram:42", "hello")
+    brain.chat.assert_awaited_once_with("telegram:42", "hello", agent_id=None)
     assert sent == ["hi there"]
+
+
+def test_forwards_agent_id_from_config():
+    sent = []
+    brain = SimpleNamespace(chat=AsyncMock(return_value="I am the operator"))
+    update = _fake_update("who are you?", 42, sent)
+    context = _fake_context(brain, agent_id="invintiry-operator")
+
+    asyncio.run(telegram_handler.on_message(update, context))
+
+    brain.chat.assert_awaited_once_with("telegram:42", "who are you?", agent_id="invintiry-operator")
+    assert sent == ["I am the operator"]
 
 
 def test_ignores_non_text_message():
