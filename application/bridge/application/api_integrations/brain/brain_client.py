@@ -21,16 +21,23 @@ class BrainClient:
         self._client = client or httpx.AsyncClient(timeout=timeout)
 
     async def chat(
-        self, conversation_id: str, message: str, agent_id: str | None = None
+        self,
+        conversation_id: str,
+        message: str,
+        agent_id: str | None = None,
+        end_user_id: str | None = None,
     ) -> str:
         """POST one turn to the brain and return its reply text.
 
-        ``agent_id`` names which agent answers; it is sent only when set, so a brain
-        that predates multi-agent support sees the same request it always did.
+        ``agent_id`` names which agent answers and ``end_user_id`` names who is
+        asking; each is sent only when set, so a brain that predates either sees
+        the same request it always did.
         """
         body: dict = {"conversation_id": conversation_id, "message": message}
         if agent_id:
             body["agent_id"] = agent_id
+        if end_user_id:
+            body["end_user_id"] = end_user_id
         resp = await self._client.post(self._url, json=body)
         resp.raise_for_status()
         return resp.json()["reply"]

@@ -4,6 +4,7 @@ Verifies the /chat contract the bridge sends: agent_id is included only when set
 so an older brain sees exactly the request it always did.
 """
 import asyncio
+import json
 
 import httpx
 
@@ -29,6 +30,24 @@ def test_agent_id_is_sent_when_set():
 
     assert reply == "ok"
     assert '"agent_id":"op"' in seen["json"].replace(" ", "")
+
+
+def test_end_user_id_is_sent_when_set_and_omitted_when_not():
+    """The brain keys credentials off this, so it must arrive verbatim."""
+    bodies = []
+
+    def handler(request):
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, json={"reply": "ok"})
+
+    client = BrainClient("http://brain", 5.0, client=httpx.AsyncClient(
+        transport=httpx.MockTransport(handler)
+    ))
+    asyncio.run(client.chat("telegram:42", "hi", end_user_id="telegram:7"))
+    asyncio.run(client.chat("telegram:42", "hi"))
+
+    assert bodies[0]["end_user_id"] == "telegram:7"
+    assert "end_user_id" not in bodies[1]
 
 
 def test_agent_id_is_omitted_when_absent():
