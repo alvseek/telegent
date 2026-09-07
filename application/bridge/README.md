@@ -242,4 +242,4 @@ would guard a millisecond window at the cost of the bridge's statelessness.
 
 ## License
 
-MIT — see [../../LICENSE](../../LICENSE).
+Apache License 2.0 — see [../../LICENSE](../../LICENSE) and [../../NOTICE](../../NOTICE).
