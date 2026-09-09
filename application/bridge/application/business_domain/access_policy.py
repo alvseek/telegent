@@ -12,12 +12,17 @@ from __future__ import annotations
 Allowlist = frozenset[int] | None
 
 
-def parse_allowlist(raw: str | None) -> Allowlist:
-    """Turn the ``ALLOWED_CHAT_IDS`` env value into an allowlist.
+def parse_allowlist(raw: str | None, name: str = "ALLOWED_CHAT_IDS") -> Allowlist:
+    """Turn an allowlist env value into an allowlist.
 
-    Comma-separated integers (Telegram chat ids; negative for groups). Empty or
+    Comma-separated integers — Telegram chat ids (negative for groups), or
+    WhatsApp sender numbers in international form without a plus. Empty or
     missing means open. Any token that is not an integer raises ``ValueError``
     so a typo fails at startup instead of silently admitting nobody or everybody.
+
+    ``name`` is the variable the value came from, so the error names the setting
+    the reader has to go and fix rather than whichever transport happened to be
+    written first.
     """
     if raw is None or not raw.strip():
         return None
@@ -30,7 +35,7 @@ def parse_allowlist(raw: str | None) -> Allowlist:
             ids.add(int(token))
         except ValueError as exc:
             raise ValueError(
-                f"ALLOWED_CHAT_IDS: {token!r} is not a chat id (integers, comma-separated)"
+                f"{name}: {token!r} is not a chat id (integers, comma-separated)"
             ) from exc
     return frozenset(ids) if ids else None
 

@@ -18,3 +18,6 @@ venv/
 
 # internal build plans (wizard artifacts) — keep the open repo product-only
 plans/
+
+# WhatsApp webhook dedupe store (SQLite + WAL sidecars)
+whatsapp.db*

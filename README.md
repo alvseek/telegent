@@ -91,7 +91,7 @@ Component-level detail lives in each component's README.
    ```sh
    cd application/bridge
    cp .env.example .env          # fill TELEGRAM_BOT_TOKEN; set BRAIN_URL=http://127.0.0.1:8100
-   python -m application.main
+   python -m application.main_telegram
    ```
 
 4. Verify it works: message your bot `/start`, then send any text — it should reply with a
@@ -113,7 +113,7 @@ the component READMEs are the manuals.
 |---|---|---|
 | `application/brain` | `uvicorn application.main:app --port 8100` | Start the brain |
 | `application/brain` | `python -m pytest tests/ -q` | Brain model-free tests |
-| `application/bridge` | `python -m application.main` | Start the bridge (long-poll) |
+| `application/bridge` | `python -m application.main_telegram` | Start the bridge (long-poll) |
 | `application/bridge` | `python -m pytest tests/ -q` | Bridge model-free tests |
 
 ### Bot commands
@@ -166,7 +166,7 @@ the brain listens on loopback only.
 | Component | Runs | Listens |
 |---|---|---|
 | brain | `uvicorn application.main:app` | loopback (e.g. `127.0.0.1:8100`) |
-| bridge | `python -m application.main` (long-poll) | nothing (outbound) |
+| bridge | `python -m application.main_telegram` (long-poll) | nothing (outbound) |
 
 **One instance per bot token** — a second bridge polling the same token gets a Telegram
 `409 Conflict`. Production topology and provisioning are managed **out-of-repo**. **CI/CD**:
@@ -229,7 +229,7 @@ relocated freely.
   causes a Telegram `409 Conflict`).
 - Backlog replay: messages sent while the bridge is offline are delivered on reconnect
   (Telegram queues updates ~24h). Intentional for a personal bot; disable with
-  `run_polling(drop_pending_updates=True)` in the bridge's `application/main.py`.
+  `run_polling(drop_pending_updates=True)` in the bridge's `application/main_telegram.py`.
 - No auth on the brain's `/chat` — it assumes a trusted local network / same host. Add an API
   key or network policy before exposing it publicly.
 

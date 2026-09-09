@@ -87,7 +87,7 @@ Run from this component's folder (`application/bridge`):
 
 4. Start (with the brain already running):
    ```sh
-   python -m application.main
+   python -m application.main_telegram
    ```
 
 5. Verify it works: message your bot on Telegram and send `/start` — it should greet you,
@@ -115,7 +115,7 @@ account (`refused chat <id>`), or in the brain's conversation ids (`telegram:<id
 
 | Command | Description |
 |---------|-------------|
-| `python -m application.main` | Start the bridge (long-polling) |
+| `python -m application.main_telegram` | Start the bridge (long-polling) |
 | `python -m pytest tests/ -q` | Run model-free tests |
 
 ### Bot commands
@@ -168,7 +168,7 @@ The bridge holds no database — conversation memory lives in the brain, keyed b
 
 ## How Is It Deployed?
 
-Runs as a single long-running Python process (`python -m application.main`) under any process
+Runs as a single long-running Python process (`python -m application.main_telegram`) under any process
 manager — systemd, Docker, a supervisor, etc. Being long-polling, there must be **exactly one
 running instance per bot token** (a second copy causes a Telegram `409 Conflict`). Production
 topology and provisioning are managed out-of-repo.

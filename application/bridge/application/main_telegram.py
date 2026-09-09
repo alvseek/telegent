@@ -10,13 +10,13 @@ import logging
 from application.api_controllers import telegram_handler
 from application.api_integrations.brain.brain_client import BrainClient
 from application.api_integrations.telegram.telegram_client import build_application
-from application.configuration.env import load_config
+from application.configuration.env import load_telegram_config
 from application.logger import logger_setup
 
 
 def main() -> None:
     logger_setup.configure()
-    config = load_config()
+    config = load_telegram_config()
 
     brain = BrainClient(config.brain_url, config.brain_timeout)
     app = build_application(
