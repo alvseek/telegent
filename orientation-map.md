@@ -38,10 +38,10 @@ Single-role repo: every entry is `shared` with empty `roles`, so the role filter
 - **type**: 7q-readme
 - **scope**: shared
 - **roles**: []
-- **status**: unverified
+- **status**: useful
 - **tags**: [overview, entry-point, stack]
-- **last_verified**: ""
-- **verified_by**: ""
+- **last_verified**: "2026-09-09"
+- **verified_by**: "software-architect / 2026-09-09 WhatsApp transport session"
 - **update_trigger**: ""
 - **notes**: "Monorepo root README. A self-hosted Telegram AI agent: a thin stateless bridge doing Telegram I/O in front of a reusable chat-agent brain. Start here for the two-component picture."
 
@@ -50,12 +50,12 @@ Single-role repo: every entry is `shared` with empty `roles`, so the role filter
 - **type**: 7q-readme
 - **scope**: shared
 - **roles**: []
-- **status**: unverified
+- **status**: useful
 - **tags**: [bridge, telegram, adr, entry-point, allowlist]
-- **last_verified**: ""
-- **verified_by**: ""
+- **last_verified**: "2026-09-09"
+- **verified_by**: "software-architect / 2026-09-09 WhatsApp transport session"
 - **update_trigger**: ""
-- **notes**: "The Telegram bridge — a stateless pipe holding no intelligence and no memory. Carries ADR-001 (split bridge from brain), ADR-002 (HTTP to the brain, measured 0.85ms vs a 4.2s LLM call), ADR-003 (stateless bridge), ADR-004 (the bridge is the door: allowlist here, drop the backlog). Names a WhatsApp/web bridge as the intended second case and records 'long-polling only, no webhook mode yet' as a known limitation."
+- **notes**: "The bridges - two transports, one application, two processes. Rewritten 2026-09-09. Carries ADR-001 to ADR-004 plus ADR-005, which records the one dedupe table and names exactly which clauses of ADR-003 and ADR-004 it supersedes. The high-priority debt at the bottom is real: no cost control stands in front of the model."
 
 ### `application/bridge/application/api_dto/README.md`
 
@@ -86,48 +86,48 @@ Single-role repo: every entry is `shared` with empty `roles`, so the role filter
 - **type**: other
 - **scope**: shared
 - **roles**: []
-- **status**: unverified
+- **status**: useful
 - **tags**: [a-boxed, placeholder, layer]
-- **last_verified**: ""
-- **verified_by**: ""
+- **last_verified**: "2026-09-09"
+- **verified_by**: "software-architect / 2026-09-09 WhatsApp transport session"
 - **update_trigger**: ""
-- **notes**: "A-Boxed L1 placeholder, intentionally minimal. The single orchestration — tag conversation_id, ask brain, reply — is thin enough to live in the handler."
+- **notes**: "No longer a placeholder. Holds forward.py, the one workflow both transports share - the allowlist decision, the namespaced ids, the brain call, the chunked reply and the apology."
 
 ### `application/bridge/application/data_entities/README.md`
 
 - **type**: other
 - **scope**: shared
 - **roles**: []
-- **status**: unverified
+- **status**: useful
 - **tags**: [a-boxed, placeholder, layer, stateless]
-- **last_verified**: ""
-- **verified_by**: ""
+- **last_verified**: "2026-09-09"
+- **verified_by**: "software-architect / 2026-09-09 WhatsApp transport session"
 - **update_trigger**: ""
-- **notes**: "A-Boxed L1 placeholder, intentionally empty — the bridge persists nothing. Persisted shapes live in the brain."
+- **notes**: "One shape, added 2026-09-09: a WhatsApp message id already answered. Nearly empty by design; conversation state still lives in the brain."
 
 ### `application/bridge/application/data_repositories/README.md`
 
 - **type**: other
 - **scope**: shared
 - **roles**: []
-- **status**: unverified
+- **status**: useful
 - **tags**: [a-boxed, placeholder, layer, stateless]
-- **last_verified**: ""
-- **verified_by**: ""
+- **last_verified**: "2026-09-09"
+- **verified_by**: "software-architect / 2026-09-09 WhatsApp transport session"
 - **update_trigger**: ""
-- **notes**: "A-Boxed L1 placeholder, intentionally empty — the bridge is stateless by design. Conversation memory lives in the brain, keyed by conversation_id."
+- **notes**: "The bridge's only storage, added 2026-09-09 because Meta retries webhooks. INSERT OR IGNORE makes the check and the write atomic. Telegram still writes nothing."
 
 ### `application/bridge/application/middleware/README.md`
 
 - **type**: other
 - **scope**: shared
 - **roles**: []
-- **status**: unverified
+- **status**: useful
 - **tags**: [a-boxed, placeholder, layer, http]
-- **last_verified**: ""
-- **verified_by**: ""
+- **last_verified**: "2026-09-09"
+- **verified_by**: "software-architect / 2026-09-09 WhatsApp transport session"
 - **update_trigger**: ""
-- **notes**: "A-Boxed L1 placeholder, intentionally empty because the bridge runs no HTTP server, so there are no routes to wrap. Read this before adding a push-based bridge: a webhook transport does run a server, and this layer stops being a placeholder."
+- **notes**: "Still empty, but for a narrower reason since 2026-09-09: the bridge DOES run an HTTP server now. Signature verification sits in the route because it needs the raw body, and error handling sits in forward.py so both transports inherit it."
 
 ### `application/brain/` (sub-project)
 
