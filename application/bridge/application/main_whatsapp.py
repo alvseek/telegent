@@ -62,7 +62,18 @@ def main() -> None:
 
     # log_config=None keeps logger_setup's configuration, which silences httpx so
     # bearer tokens never reach the log.
-    uvicorn.run(app, host=config.host, port=config.port, log_config=None)
+    #
+    # access_log=False for a reason that is not tidiness. uvicorn's access line
+    # includes the full query string, and Meta's handshake carries the verify
+    # token in the query string — so leaving it on writes a credential into the
+    # journal on every registration. It also fills the log with the vulnerability
+    # scanners that find this host within minutes of its certificate appearing in
+    # the public certificate-transparency feed. The handler's own logging is the
+    # part worth keeping: handshakes accepted and refused, signatures rejected,
+    # duplicates dropped.
+    uvicorn.run(
+        app, host=config.host, port=config.port, log_config=None, access_log=False
+    )
 
 
 if __name__ == "__main__":
