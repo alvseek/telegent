@@ -20,5 +20,10 @@ def build_application(
 ) -> Application:
     app = Application.builder().token(token).build()
     app.add_handler(CommandHandler("start", on_start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_message))
+    # Photos are admitted too: a captioned photo carries its words in `.caption`,
+    # not `.text`, so a TEXT-only filter would drop every photo before the handler
+    # ever saw it.
+    app.add_handler(
+        MessageHandler((filters.TEXT | filters.PHOTO) & ~filters.COMMAND, on_message)
+    )
     return app

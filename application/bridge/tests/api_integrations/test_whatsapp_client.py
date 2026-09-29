@@ -122,3 +122,34 @@ def test_any_2xx_counts_as_accepted(status):
         return httpx.Response(status, json={})
 
     assert asyncio.run(_client_with(handler).send_text("62", "hi")) is True
+
+
+def test_download_media_resolves_then_fetches_with_the_bearer():
+    """Two hops: the media id resolves to a URL, and that URL carries the bytes."""
+    calls = []
+
+    def handler(request):
+        calls.append((str(request.url), request.headers.get("Authorization")))
+        if len(calls) == 1:
+            return httpx.Response(200, json={"url": "https://lookaside.example/media/1"})
+        return httpx.Response(200, content=b"image-bytes")
+
+    data = asyncio.run(_client_with(handler).download_media("media.1"))
+
+    assert data == b"image-bytes"
+    assert [url for url, _ in calls] == [
+        "https://graph.facebook.com/v22.0/media.1",
+        "https://lookaside.example/media/1",
+    ]
+    assert all(auth == "Bearer EAAtoken" for _, auth in calls)
+
+
+def test_download_media_raises_rather_than_returning_nothing():
+    """Unlike a send, a failed fetch must be visible — the caller needs to know
+    the photo never arrived."""
+
+    def handler(request):
+        return httpx.Response(404, json={"error": {"message": "expired"}})
+
+    with pytest.raises(httpx.HTTPStatusError):
+        asyncio.run(_client_with(handler).download_media("media.1"))

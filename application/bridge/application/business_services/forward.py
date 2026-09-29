@@ -45,6 +45,7 @@ async def forward(
     allowlist: Allowlist,
     send: Send,
     on_admitted: OnAdmitted | None = None,
+    image: bytes | None = None,
 ) -> None:
     """Run one message through the brain and send back what comes out.
 
@@ -74,6 +75,7 @@ async def forward(
             text,
             agent_id=agent_id,
             end_user_id=end_user_id,
+            image=image,
         )
         for part in chunk(reply):
             await send(part)

@@ -41,7 +41,9 @@ def _app(seen=None, brain=None, whatsapp=None, allowed=None, agent_id=None):
     )
     app.state.brain = brain or SimpleNamespace(chat=AsyncMock(return_value="ok"))
     app.state.whatsapp = whatsapp or SimpleNamespace(
-        send_text=AsyncMock(return_value=True), mark_read=AsyncMock(return_value=True)
+        send_text=AsyncMock(return_value=True),
+        mark_read=AsyncMock(return_value=True),
+        download_media=AsyncMock(return_value=b"image-bytes"),
     )
     app.state.seen = seen or _Seen()
     app.include_router(router)
@@ -68,6 +70,35 @@ def _message_payload(text="hello", sender=SENDER, wamid="wamid.AAA"):
                                     "timestamp": "1788000000",
                                     "type": "text",
                                     "text": {"body": text},
+                                }
+                            ],
+                        }
+                    }
+                ]
+            }
+        ],
+    }
+
+
+def _image_payload(caption=None, media_id="media.1", sender=SENDER, wamid="wamid.IMG"):
+    image = {"id": media_id, "mime_type": "image/jpeg"}
+    if caption is not None:
+        image["caption"] = caption
+    return {
+        "object": "whatsapp_business_account",
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "value": {
+                            "messaging_product": "whatsapp",
+                            "messages": [
+                                {
+                                    "from": sender,
+                                    "id": wamid,
+                                    "timestamp": "1788000000",
+                                    "type": "image",
+                                    "image": image,
                                 }
                             ],
                         }
@@ -175,13 +206,53 @@ def test_a_delivery_receipt_does_not_reach_the_brain():
     brain.chat.assert_not_awaited()
 
 
-def test_a_non_text_message_does_not_reach_the_brain():
+def test_an_image_reaches_the_brain_with_its_bytes():
+    brain = SimpleNamespace(chat=AsyncMock(return_value="ok"))
+    whatsapp = SimpleNamespace(
+        send_text=AsyncMock(return_value=True),
+        mark_read=AsyncMock(return_value=True),
+        download_media=AsyncMock(return_value=b"image-bytes"),
+    )
+
+    _post(_app(brain=brain, whatsapp=whatsapp), _image_payload(caption="set this on HDMI"))
+
+    whatsapp.download_media.assert_awaited_once_with("media.1")
+    args, kwargs = brain.chat.await_args
+    assert args[1] == "set this on HDMI"
+    assert kwargs["image"] == b"image-bytes"
+
+
+def test_a_caption_less_image_arrives_as_a_placeholder():
+    brain = SimpleNamespace(chat=AsyncMock(return_value="which item?"))
+
+    _post(_app(brain=brain), _image_payload())
+
+    assert brain.chat.await_args.args[1] == "[photo]"
+
+
+def test_a_failed_media_download_still_answers():
+    """The caption still reaches the brain rather than the turn dying."""
+    brain = SimpleNamespace(chat=AsyncMock(return_value="ok"))
+    whatsapp = SimpleNamespace(
+        send_text=AsyncMock(return_value=True),
+        mark_read=AsyncMock(return_value=True),
+        download_media=AsyncMock(side_effect=RuntimeError("meta down")),
+    )
+
+    _post(_app(brain=brain, whatsapp=whatsapp), _image_payload(caption="set this on HDMI"))
+
+    assert brain.chat.await_args.kwargs["image"] is None
+    assert brain.chat.await_args.args[1] == "set this on HDMI"
+
+
+def test_other_media_still_does_not_reach_the_brain():
+    """A sticker has no text and no image — nothing the operator can act on."""
     brain = SimpleNamespace(chat=AsyncMock())
     payload = _message_payload()
     message = payload["entry"][0]["changes"][0]["value"]["messages"][0]
     del message["text"]
-    message["type"] = "image"
-    message["image"] = {"id": "media.1"}
+    message["type"] = "sticker"
+    message["sticker"] = {"id": "sticker.1"}
 
     response = _post(_app(brain=brain), payload)
 
@@ -242,6 +313,7 @@ def test_a_message_is_namespaced_and_answered():
         "what's in Andes?",
         agent_id="invintiry-operator",
         end_user_id=f"whatsapp:{SENDER}",
+        image=None,
     )
     whatsapp.send_text.assert_awaited_once_with(SENDER, "nine locations")
 

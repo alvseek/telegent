@@ -56,13 +56,15 @@ def signature_ok(secret: str, raw_body: bytes, header: str | None) -> bool:
 
 
 def extract_message(payload: dict) -> dict | None:
-    """Pull the one text message out of a webhook, or None if there isn't one.
+    """Pull the one answerable message out of a webhook, or None if there isn't one.
 
     Meta delivers several unrelated things down this route. A payload carrying
     ``statuses`` is a delivery receipt for something *we* sent — the sent /
     delivered / read lifecycle — and answering one would mean replying to
-    ourselves. Media, stickers and button taps arrive with no ``text.body`` and
-    are ignored, matching what the Telegram side does with a non-text update.
+    ourselves. Stickers and button taps arrive with no ``text.body`` and are
+    ignored. An **image** is the one non-text message we act on, because the
+    operator can attach a photo to an item: it arrives as a media id and an
+    optional caption, and its bytes are fetched separately.
     """
     try:
         value = payload["entry"][0]["changes"][0]["value"]
@@ -72,10 +74,20 @@ def extract_message(payload: dict) -> dict | None:
     if not messages:
         return None
     message = messages[0]
-    body = (message.get("text") or {}).get("body")
     sender = message.get("from")
     wamid = message.get("id")
-    if not body or not sender or not wamid:
+    if not sender or not wamid:
+        return None
+    image = message.get("image") or {}
+    if image.get("id"):
+        return {
+            "wamid": wamid,
+            "sender": sender,
+            "text": image.get("caption") or "",
+            "media_id": image["id"],
+        }
+    body = (message.get("text") or {}).get("body")
+    if not body:
         return None
     return {"wamid": wamid, "sender": sender, "text": body}
 
@@ -134,6 +146,22 @@ async def receive(request: Request, background: BackgroundTasks) -> PlainTextRes
     return PlainTextResponse("ok")
 
 
+async def _media_bytes(state, message: dict) -> bytes | None:
+    """The photo's bytes, or None when this message carried no image.
+
+    A failed fetch degrades to "no photo" rather than losing the turn: the caption
+    still reaches the brain, and the operator can ask for the photo again.
+    """
+    media_id = message.get("media_id")
+    if not media_id:
+        return None
+    try:
+        return await state.whatsapp.download_media(media_id)
+    except Exception:
+        log.exception("failed to download a WhatsApp image")
+        return None
+
+
 async def handle_message(state, message: dict) -> None:
     """Run one delivered message through the shared workflow."""
     sender = message["sender"]
@@ -157,7 +185,8 @@ async def handle_message(state, message: dict) -> None:
         # In a one-to-one WhatsApp chat the room and the person are the same
         # thing, unlike a Telegram group where they diverge.
         user_key=chat_key,
-        text=message["text"],
+        text=message["text"] or "[photo]",
+        image=await _media_bytes(state, message),
         brain=state.brain,
         agent_id=state.config.agent_id,
         allowlist=state.config.allowed_ids,

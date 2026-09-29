@@ -23,6 +23,7 @@ enforced in ``forward``, once, for every transport.
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from telegram import Update, constants
 from telegram.ext import ContextTypes
@@ -44,6 +45,31 @@ def user_key(update: Update) -> int | None:
     return None if user is None else user.id
 
 
+def _text_of(message: Any) -> str:
+    """A photo's words live in ``caption``, not ``text``.
+
+    A bare photo still needs a non-empty message — the brain requires one — so it
+    becomes a marker the operator can act on ("which item?").
+    """
+    return (message.text or message.caption or "") or "[photo]"
+
+
+async def _photo_bytes(message: Any) -> bytes | None:
+    """The largest size of an attached photo, or None when there is none.
+
+    A download failure degrades to "no photo" rather than losing the turn: the
+    caption still reaches the brain, and the operator can ask for the photo again.
+    """
+    if not message.photo:
+        return None
+    try:
+        photo_file = await message.photo[-1].get_file()
+        return bytes(await photo_file.download_as_bytearray())
+    except Exception:
+        log.exception("failed to download a Telegram photo")
+        return None
+
+
 async def _forward(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Adapt one Telegram update onto the shared workflow."""
     message = update.message
@@ -59,7 +85,8 @@ async def _forward(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         platform=PLATFORM,
         chat_key=message.chat_id,
         user_key=user_key(update),
-        text=message.text,
+        text=_text_of(message),
+        image=await _photo_bytes(message),
         brain=context.bot_data["brain"],
         agent_id=getattr(config, "agent_id", None),
         allowlist=getattr(config, "allowed_chat_ids", None),
@@ -77,6 +104,6 @@ async def on_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def on_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.message
-    if message is None or not message.text:
+    if message is None or not (message.text or message.photo):
         return
     await _forward(update, context)

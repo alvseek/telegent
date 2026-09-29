@@ -9,6 +9,8 @@ sub-millisecond and dwarfed by the brain's LLM call.
 """
 from __future__ import annotations
 
+import base64
+
 import httpx
 
 
@@ -26,18 +28,22 @@ class BrainClient:
         message: str,
         agent_id: str | None = None,
         end_user_id: str | None = None,
+        image: bytes | None = None,
     ) -> str:
         """POST one turn to the brain and return its reply text.
 
         ``agent_id`` names which agent answers and ``end_user_id`` names who is
         asking; each is sent only when set, so a brain that predates either sees
-        the same request it always did.
+        the same request it always did. ``image`` is a photo this transport
+        downloaded — base64 in the body, and omitted entirely when there is none.
         """
         body: dict = {"conversation_id": conversation_id, "message": message}
         if agent_id:
             body["agent_id"] = agent_id
         if end_user_id:
             body["end_user_id"] = end_user_id
+        if image:
+            body["image"] = base64.b64encode(image).decode()
         resp = await self._client.post(self._url, json=body)
         resp.raise_for_status()
         return resp.json()["reply"]

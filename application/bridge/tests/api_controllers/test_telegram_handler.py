@@ -17,13 +17,28 @@ from unittest.mock import AsyncMock
 from application.api_controllers import telegram_handler
 
 
-def _fake_update(text, chat_id, sent, user_id=None):
+def _fake_update(text, chat_id, sent, user_id=None, photo=None, caption=None):
     async def reply_text(part):
         sent.append(part)
 
-    message = SimpleNamespace(text=text, chat_id=chat_id, reply_text=reply_text)
+    message = SimpleNamespace(
+        text=text, caption=caption, photo=photo, chat_id=chat_id, reply_text=reply_text
+    )
     user = None if user_id is None else SimpleNamespace(id=user_id)
     return SimpleNamespace(message=message, effective_user=user)
+
+
+class _Photo:
+    """Stands in for telegram.PhotoSize — the two calls the handler makes."""
+
+    def __init__(self, data):
+        self._data = data
+
+    async def get_file(self):
+        return self
+
+    async def download_as_bytearray(self):
+        return bytearray(self._data)
 
 
 def _fake_context(brain, agent_id=None, allowed=None):
@@ -43,7 +58,7 @@ def test_forwards_to_brain_with_namespaced_ids_and_replies():
     asyncio.run(telegram_handler.on_message(update, context))
 
     brain.chat.assert_awaited_once_with(
-        "telegram:42", "hello", agent_id=None, end_user_id="telegram:7"
+        "telegram:42", "hello", agent_id=None, end_user_id="telegram:7", image=None
     )
     assert sent == ["hi there"]
 
@@ -74,6 +89,7 @@ def test_forwards_agent_id_from_config():
         "who are you?",
         agent_id="invintiry-operator",
         end_user_id="telegram:7",
+        image=None,
     )
     assert sent == ["I am the operator"]
 
@@ -89,17 +105,61 @@ def test_a_message_without_a_sender_forwards_no_caller():
     assert brain.chat.await_args.kwargs["end_user_id"] is None
 
 
-def test_ignores_non_text_message():
+def test_ignores_a_message_with_neither_text_nor_photo():
     sent = []
     brain = SimpleNamespace(chat=AsyncMock())
-    update = SimpleNamespace(
-        message=SimpleNamespace(text=None, chat_id=1), effective_user=None
-    )
+    update = _fake_update(None, 1, sent, user_id=None)
     context = _fake_context(brain)
 
     asyncio.run(telegram_handler.on_message(update, context))
 
     brain.chat.assert_not_awaited()
+
+
+def test_a_captioned_photo_reaches_the_brain_with_its_bytes():
+    """A photo's words are its caption — ``message.text`` is None for one."""
+    sent = []
+    brain = SimpleNamespace(chat=AsyncMock(return_value="ok"))
+    update = _fake_update(
+        None, 42, sent, user_id=7,
+        photo=(_Photo(b"small"), _Photo(b"largest")),
+        caption="set this on HDMI cables",
+    )
+
+    asyncio.run(telegram_handler.on_message(update, _fake_context(brain)))
+
+    args, kwargs = brain.chat.await_args
+    assert args[1] == "set this on HDMI cables"
+    assert kwargs["image"] == b"largest"  # the largest size wins
+
+
+def test_a_bare_photo_arrives_as_a_placeholder():
+    """The brain requires a non-empty message, and silence looks broken."""
+    sent = []
+    brain = SimpleNamespace(chat=AsyncMock(return_value="which item?"))
+    update = _fake_update(None, 42, sent, user_id=7, photo=(_Photo(b"x"),))
+
+    asyncio.run(telegram_handler.on_message(update, _fake_context(brain)))
+
+    assert brain.chat.await_args.args[1] == "[photo]"
+
+
+def test_a_failed_photo_download_still_answers():
+    class Broken(_Photo):
+        async def get_file(self):
+            raise RuntimeError("telegram down")
+
+    sent = []
+    brain = SimpleNamespace(chat=AsyncMock(return_value="ok"))
+    update = _fake_update(
+        None, 42, sent, user_id=7, photo=(Broken(b"x"),), caption="set this on HDMI"
+    )
+
+    asyncio.run(telegram_handler.on_message(update, _fake_context(brain)))
+
+    args, kwargs = brain.chat.await_args
+    assert kwargs["image"] is None
+    assert args[1] == "set this on HDMI"
 
 
 def test_brain_failure_sends_apology():
@@ -174,6 +234,37 @@ def test_start_is_forwarded_so_a_link_code_reaches_the_brain():
     asyncio.run(telegram_handler.on_start(update, context))
 
     brain.chat.assert_awaited_once_with(
-        "telegram:42", "/start ABC123", agent_id=None, end_user_id="telegram:7"
+        "telegram:42", "/start ABC123", agent_id=None, end_user_id="telegram:7", image=None
     )
     assert sent == ["Linked as Alvi"]
+
+
+def test_the_registered_filter_admits_a_photo():
+    """The filter is load-bearing: `filters.TEXT` alone drops every photo before
+    `on_message` ever sees it, so the registration is asserted directly."""
+    from datetime import datetime, timezone
+
+    from telegram import Chat, Message, PhotoSize, Update
+    from telegram.ext import MessageHandler
+
+    from application.api_integrations.telegram.telegram_client import build_application
+
+    async def _noop(*_args, **_kwargs):  # pragma: no cover - never invoked
+        return None
+
+    app = build_application("123456:ABC-DEF", _noop, _noop)
+    handler = next(h for h in app.handlers[0] if isinstance(h, MessageHandler))
+
+    def update_with(**kwargs):
+        message = Message(
+            message_id=1,
+            date=datetime.now(timezone.utc),
+            chat=Chat(id=1, type="private"),
+            **kwargs,
+        )
+        return Update(update_id=1, message=message)
+
+    photo = PhotoSize(file_id="f", file_unique_id="u", width=1, height=1)
+
+    assert handler.filters.check_update(update_with(text="hi"))
+    assert handler.filters.check_update(update_with(photo=(photo,)))

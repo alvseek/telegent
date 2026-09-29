@@ -4,6 +4,7 @@ Verifies the /chat contract the bridge sends: agent_id is included only when set
 so an older brain sees exactly the request it always did.
 """
 import asyncio
+import base64
 import json
 
 import httpx
@@ -60,3 +61,28 @@ def test_agent_id_is_omitted_when_absent():
     asyncio.run(_client_with(handler).chat("telegram:1", "hi"))
 
     assert "agent_id" not in seen["json"]
+
+
+def test_an_image_is_base64_in_the_body():
+    bodies = []
+
+    def handler(request):
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, json={"reply": "ok"})
+
+    asyncio.run(_client_with(handler).chat("telegram:1", "set the photo", image=b"jpeg-bytes"))
+
+    assert bodies[0]["image"] == base64.b64encode(b"jpeg-bytes").decode()
+
+
+def test_no_image_leaves_the_body_exactly_as_it_was():
+    """A text-only turn must be byte-for-byte what an older brain always saw."""
+    bodies = []
+
+    def handler(request):
+        bodies.append(json.loads(request.content))
+        return httpx.Response(200, json={"reply": "ok"})
+
+    asyncio.run(_client_with(handler).chat("telegram:1", "hi"))
+
+    assert bodies[0] == {"conversation_id": "telegram:1", "message": "hi"}

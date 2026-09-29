@@ -35,6 +35,7 @@ class WhatsAppClient:
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self._url = f"{GRAPH_BASE}/{api_version}/{phone_number_id}/messages"
+        self._api_version = api_version
         self._headers = {
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
@@ -65,6 +66,21 @@ class WhatsAppClient:
             "message_id": message_id,
         }
         return await self._post(payload, "read receipt")
+
+    async def download_media(self, media_id: str) -> bytes:
+        """Fetch one inbound image's bytes. Two hops, both with the bearer.
+
+        The media id resolves to a short-lived URL, and that URL is what actually
+        carries the bytes. A failure here is **not** swallowed the way a send is:
+        the caller needs to know the photo did not arrive.
+        """
+        resolved = await self._client.get(
+            f"{GRAPH_BASE}/{self._api_version}/{media_id}", headers=self._headers
+        )
+        resolved.raise_for_status()
+        media = await self._client.get(resolved.json()["url"], headers=self._headers)
+        media.raise_for_status()
+        return media.content
 
     async def _post(self, payload: dict, what: str) -> bool:
         try:
